@@ -1,0 +1,21 @@
+# Replace /srv/symphony-instance paths; environment files contain host-only credentials.
+[Unit]
+Description=Symphony with native management
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/srv/symphony-instance
+Environment=SYMPHONY_MANAGEMENT_ENABLED=1
+Environment=SYMPHONY_MANAGEMENT_STATE_DIR=/srv/symphony-instance/state
+EnvironmentFile=/srv/symphony-instance/runtime.env
+ExecStart=/srv/symphony-instance/releases/APPROVED_REVISION/symphony /srv/symphony-instance/WORKFLOW.md --i-understand-that-this-will-be-running-without-the-usual-guardrails --logs-root /srv/symphony-instance/logs
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=60
+KillMode=control-group
+UMask=0077
+
+[Install]
+WantedBy=default.target

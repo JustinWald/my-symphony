@@ -39,3 +39,11 @@ help with the setup:
 ## License
 
 This project is licensed under the [Apache License 2.0](LICENSE).
+
+## Native management
+
+This fork integrates management directly into Symphony's Elixir application
+and Phoenix dashboard, including notifications, weekly reports, improvement
+audits and durable usage history. See [native management](docs/native-management.md)
+for operation and migration instructions. Upstream attribution and
+licensing are retained; upstream synchronization is optional.

@@ -469,3 +469,39 @@ pre,
     padding: 1rem;
   }
 }
+
+.management-console form,
+.management-console article,
+.management-console > section {
+  padding: 1.25rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 16px;
+  background: var(--card);
+}
+
+.management-console form { margin: 1rem 0; }
+.management-console label { display: inline-block; margin: 0.35rem 0.8rem 0.35rem 0; }
+.management-console input:not([type="checkbox"]),
+.management-console select,
+.management-console textarea {
+  padding: 0.5rem;
+  max-width: 100%;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  font: inherit;
+}
+.management-console button {
+  padding: 0.5rem 0.8rem;
+  margin: 0.3rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  cursor: pointer;
+}
+.management-console button:disabled { opacity: 0.5; cursor: default; }
+.management-console table { display: block; width: 100%; overflow-x: auto; border-collapse: collapse; }
+.management-console th, .management-console td { padding: 0.6rem; text-align: left; border-bottom: 1px solid var(--line); }
+.management-console pre { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; }
+.management-console dt { font-weight: 600; }
+.management-console dd { margin: 0 0 0.6rem; }

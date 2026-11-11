@@ -6,6 +6,10 @@ defmodule SymphonyElixirWeb.Router do
   use Phoenix.Router
   import Phoenix.LiveView.Router
 
+  pipeline :management do
+    plug(SymphonyElixirWeb.ManagementAccess)
+  end
+
   pipeline :browser do
     plug(:fetch_session)
     plug(:fetch_live_flash)
@@ -26,6 +30,19 @@ defmodule SymphonyElixirWeb.Router do
     pipe_through(:browser)
 
     live("/", DashboardLive, :index)
+  end
+
+  scope "/", SymphonyElixirWeb do
+    pipe_through([:management, :browser])
+    live("/usage", UsageLive, :index)
+    live("/settings/notifications", ManagementLive, :index)
+    live("/reports", ManagementLive, :index)
+  end
+
+  scope "/", SymphonyElixirWeb do
+    pipe_through(:management)
+    get("/api/v1/usage", UsageApiController, :summary)
+    get("/api/v1/usage/sessions", UsageApiController, :sessions)
   end
 
   scope "/", SymphonyElixirWeb do

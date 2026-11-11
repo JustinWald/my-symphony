@@ -6,6 +6,24 @@ defmodule SymphonyElixir.Config do
   alias SymphonyElixir.{Config.Schema, Tracker}
   alias SymphonyElixir.{Workflow, WorkflowStore}
 
+  @spec runtime_assets_dir() :: Path.t()
+  def runtime_assets_dir do
+    Path.join(System.get_env("XDG_CACHE_HOME") || Path.expand("~/.cache"), "symphony/runtime")
+  end
+
+  @spec management_enabled?() :: boolean()
+  def management_enabled? do
+    Application.get_env(:symphony_elixir, :management_enabled, System.get_env("SYMPHONY_MANAGEMENT_ENABLED") == "1")
+  end
+
+  @doc "Host-local durable management state; never stored in an agent workspace."
+  @spec management_state_dir() :: Path.t()
+  def management_state_dir do
+    Application.get_env(:symphony_elixir, :management_state_dir) ||
+      System.get_env("SYMPHONY_MANAGEMENT_STATE_DIR") ||
+      Path.join(System.get_env("XDG_STATE_HOME") || Path.expand("~/.local/state"), "symphony")
+  end
+
   @default_prompt_template """
   You are working on an issue from the configured tracker.
 

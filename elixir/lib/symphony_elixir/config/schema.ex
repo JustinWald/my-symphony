@@ -190,6 +190,7 @@ defmodule SymphonyElixir.Config.Schema do
         }
       )
 
+      field(:preserve_permission_profile, :boolean, default: false)
       field(:thread_sandbox, :string, default: "workspace-write")
       field(:turn_sandbox_policy, :map)
       field(:turn_timeout_ms, :integer, default: 3_600_000)
@@ -205,6 +206,7 @@ defmodule SymphonyElixir.Config.Schema do
         [
           :command,
           :approval_policy,
+          :preserve_permission_profile,
           :thread_sandbox,
           :turn_sandbox_policy,
           :turn_timeout_ms,
@@ -290,6 +292,7 @@ defmodule SymphonyElixir.Config.Schema do
   end
 
   embedded_schema do
+    field(:management, :map, default: %{})
     embeds_one(:tracker, Tracker, on_replace: :update, defaults_to_struct: true)
     embeds_one(:polling, Polling, on_replace: :update, defaults_to_struct: true)
     embeds_one(:workspace, Workspace, on_replace: :update, defaults_to_struct: true)
@@ -383,7 +386,7 @@ defmodule SymphonyElixir.Config.Schema do
 
   defp changeset(attrs) do
     %__MODULE__{}
-    |> cast(attrs, [])
+    |> cast(attrs, [:management])
     |> cast_embed(:tracker, with: &Tracker.changeset/2)
     |> cast_embed(:polling, with: &Polling.changeset/2)
     |> cast_embed(:workspace, with: &Workspace.changeset/2)

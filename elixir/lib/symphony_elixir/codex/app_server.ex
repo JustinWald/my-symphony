@@ -4,7 +4,9 @@ defmodule SymphonyElixir.Codex.AppServer do
   """
 
   require Logger
-  alias SymphonyElixir.{Codex.DynamicTool, Config, PathSafety, SSH}
+  alias SymphonyElixir.Codex.{DynamicTool, Protocol}
+  alias SymphonyElixir.{Config, PathSafety, SSH}
+  alias SymphonyElixir.Management.{Recorder, Settings}
 
   @initialize_id 1
   @thread_start_id 2
@@ -26,7 +28,7 @@ defmodule SymphonyElixir.Codex.AppServer do
 
   @spec run(Path.t(), String.t(), map(), keyword()) :: {:ok, map()} | {:error, term()}
   def run(workspace, prompt, issue, opts \\ []) do
-    with {:ok, session} <- start_session(workspace, opts) do
+    with {:ok, session} <- start_session(workspace, Keyword.put(opts, :issue, issue)) do
       try do
         run_turn(session, prompt, issue, opts)
       after
@@ -40,23 +42,35 @@ defmodule SymphonyElixir.Codex.AppServer do
     worker_host = Keyword.get(opts, :worker_host)
     dynamic_tool_binding = DynamicTool.bind()
 
-    with {:ok, expanded_workspace} <- validate_workspace_cwd(workspace, worker_host),
-         {:ok, port} <- start_port(expanded_workspace, worker_host, dynamic_tool_binding) do
+    with {:ok, expanded_workspace} <- validate_workspace_cwd(workspace, worker_host) do
+      context = Recorder.begin_session(expanded_workspace, opts[:issue], worker_host)
+      result = start_validated_session(expanded_workspace, worker_host, dynamic_tool_binding, context)
+
+      if match?({:error, _}, result) do
+        Recorder.observe(%{event: :startup_failed, management_context: context})
+        Recorder.finish_session(context, true)
+      end
+
+      result
+    end
+  end
+
+  defp start_validated_session(workspace, worker_host, dynamic_tool_binding, context) do
+    with {:ok, port} <- start_port(workspace, worker_host, dynamic_tool_binding) do
       metadata = port_metadata(port, worker_host)
 
-      with {:ok, session_policies} <- session_policies(expanded_workspace, worker_host),
-           {:ok, thread_id} <-
-             do_start_session(port, expanded_workspace, session_policies, dynamic_tool_binding) do
+      with {:ok, session_policies} <- session_policies(workspace, worker_host),
+           {:ok, thread_id} <- do_start_session(port, workspace, session_policies, dynamic_tool_binding) do
         {:ok,
          %{
            port: port,
-           metadata: metadata,
+           metadata: metadata_with_context(metadata, context, thread_id),
            approval_policy: session_policies.approval_policy,
            auto_approve_requests: session_policies.approval_policy == "never",
            thread_sandbox: session_policies.thread_sandbox,
            turn_sandbox_policy: session_policies.turn_sandbox_policy,
            thread_id: thread_id,
-           workspace: expanded_workspace,
+           workspace: workspace,
            worker_host: worker_host,
            dynamic_tool_binding: dynamic_tool_binding
          }}
@@ -66,6 +80,13 @@ defmodule SymphonyElixir.Codex.AppServer do
           {:error, reason}
       end
     end
+  end
+
+  defp metadata_with_context(metadata, nil, _thread_id), do: metadata
+
+  defp metadata_with_context(metadata, context, thread_id) do
+    context = Map.merge(context, %{thread: thread_id, model: Process.get(:management_model), effort: Process.get(:management_effort)})
+    Map.put(metadata, :management_context, context)
   end
 
   @spec run_turn(session(), String.t(), map(), keyword()) :: {:ok, map()} | {:error, term()}
@@ -90,6 +111,8 @@ defmodule SymphonyElixir.Codex.AppServer do
       Keyword.get(opts, :tool_executor, fn tool, arguments ->
         DynamicTool.execute(tool, arguments, dynamic_tool_binding, issue: issue)
       end)
+
+    metadata = issue_context(metadata, issue)
 
     case start_turn(port, thread_id, prompt, issue, workspace, approval_policy, turn_sandbox_policy) do
       {:ok, turn_id} ->
@@ -143,9 +166,15 @@ defmodule SymphonyElixir.Codex.AppServer do
   end
 
   @spec stop_session(session()) :: :ok
-  def stop_session(%{port: port}) when is_port(port) do
+  def stop_session(%{port: port} = session) when is_port(port) do
+    Recorder.finish_session(get_in(session, [:metadata, :management_context]))
     stop_port(port)
   end
+
+  defp issue_context(%{management_context: context} = metadata, issue),
+    do: Map.put(metadata, :management_context, Map.put(context, :issue, issue.id))
+
+  defp issue_context(metadata, _issue), do: metadata
 
   defp validate_workspace_cwd(workspace, nil) when is_binary(workspace) do
     expanded_workspace = Path.expand(workspace)
@@ -238,13 +267,15 @@ defmodule SymphonyElixir.Codex.AppServer do
   end
 
   defp tracker_secret_port_env(dynamic_tool_binding) do
-    dynamic_tool_binding.secret_environment_names
+    (dynamic_tool_binding.secret_environment_names ++ Settings.worker_secret_environment_names())
     |> valid_environment_names()
     |> Enum.map(fn name -> {String.to_charlist(name), false} end)
   end
 
   defp tracker_secret_unset_command(dynamic_tool_binding) do
-    case dynamic_tool_binding.secret_environment_names |> valid_environment_names() do
+    names = dynamic_tool_binding.secret_environment_names ++ Settings.worker_secret_environment_names()
+
+    case valid_environment_names(names) do
       [] -> nil
       names -> "unset " <> Enum.join(names, " ")
     end
@@ -329,7 +360,10 @@ defmodule SymphonyElixir.Codex.AppServer do
     })
 
     case await_response(port, @thread_start_id) do
-      {:ok, %{"thread" => thread_payload}} ->
+      {:ok, %{"thread" => thread_payload} = response} ->
+        Process.put(:management_model, response["model"])
+        Process.put(:management_effort, response["reasoningEffort"])
+
         case thread_payload do
           %{"id" => thread_id} -> {:ok, thread_id}
           _ -> {:error, {:invalid_thread_payload, thread_payload}}
@@ -981,7 +1015,8 @@ defmodule SymphonyElixir.Codex.AppServer do
 
   defp emit_message(on_message, event, details, metadata) when is_function(on_message, 1) do
     message = metadata |> Map.merge(details) |> Map.put(:event, event) |> Map.put(:timestamp, DateTime.utc_now())
-    on_message.(message)
+    Recorder.observe(message)
+    on_message.(Map.delete(message, :management_context))
   end
 
   defp metadata_from_message(port, payload) do
@@ -1028,6 +1063,7 @@ defmodule SymphonyElixir.Codex.AppServer do
   defp tool_call_arguments(_params), do: %{}
 
   defp send_message(port, message) do
+    message = Protocol.preserve_profile(message, Config.settings!().codex.preserve_permission_profile)
     line = Jason.encode!(message) <> "\n"
     Port.command(port, line)
   end

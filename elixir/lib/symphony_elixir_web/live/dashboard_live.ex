@@ -47,6 +47,7 @@ defmodule SymphonyElixirWeb.DashboardLive do
             <p class="eyebrow">
               Symphony Observability
             </p>
+            <a href="/usage">Usage history</a> · <a href="/settings/notifications">Reports and notifications</a>
             <h1 class="hero-title">
               Operations Dashboard
             </h1>

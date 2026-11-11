@@ -403,3 +403,8 @@ you.
 ## License
 
 This project is licensed under the [Apache License 2.0](../LICENSE).
+
+## Native management
+
+Native management adds `/usage`, `/reports` and
+`/settings/notifications` to the existing loopback dashboard. Enable it with `SYMPHONY_MANAGEMENT_ENABLED=1`; see [operation and migration instructions](../docs/native-management.md).
