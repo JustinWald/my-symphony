@@ -187,3 +187,8 @@ databases, Git repositories, harnesses and fake providers. They cover imports an
 partial telemetry, provider failures/retries, shared credentials, scheduling/DST,
 owner/writer recovery, exact-head CI, bounded audits, safe draft proposals, native
 assets and LiveView controls. Real host sandbox probes require no model call.
+
+For a newly created fork, initialize GitHub Actions before relying on PR checks.
+The inherited `make-all` and `pr-description-lint` workflows validate the pushed
+PR head. Enabling Actions does not require changing their permission policy or
+activating a release. Treat absent checks as unverified, even when local gates pass.
