@@ -7,7 +7,8 @@ defmodule SymphonyElixir.Orchestrator do
   require Logger
   import Bitwise, only: [<<<: 2]
 
-  alias SymphonyElixir.{AgentRunner, Config, StatusDashboard, Tracker, Workspace}
+  alias SymphonyElixir.{AgentRunner, Config, DeploymentControl, DispatchGate, Project}
+  alias SymphonyElixir.{StatusDashboard, Tracker, Workspace}
   alias SymphonyElixir.Tracker.Issue
 
   @continuation_retry_delay_ms 1_000
@@ -53,6 +54,8 @@ defmodule SymphonyElixir.Orchestrator do
 
   @impl true
   def init(opts) do
+    Project.bind(Keyword.get(opts, :project, Project.current()))
+
     case Config.settings() do
       {:ok, config} ->
         now_ms = System.monotonic_time(:millisecond)
@@ -69,7 +72,8 @@ defmodule SymphonyElixir.Orchestrator do
           codex_rate_limits: nil
         }
 
-        run_terminal_workspace_cleanup()
+        state = SymphonyElixir.RuntimeCheckpoint.restore(state)
+        unless DeploymentControl.dispatch_paused?(), do: run_terminal_workspace_cleanup()
         state = schedule_tick(state, 0)
 
         {:ok, state}
@@ -117,7 +121,7 @@ defmodule SymphonyElixir.Orchestrator do
 
   def handle_info(:run_poll_cycle, state) do
     state = refresh_runtime_config(state)
-    state = maybe_dispatch(state)
+    state = if DeploymentControl.effects_held?(), do: state, else: maybe_dispatch(state)
     state = schedule_tick(state, state.poll_interval_ms)
     state = %{state | poll_check_in_progress: false}
 
@@ -139,6 +143,7 @@ defmodule SymphonyElixir.Orchestrator do
         session_id = running_entry_session_id(running_entry)
 
         state = handle_agent_down(reason, state, issue_id, running_entry, session_id)
+        DispatchGate.release(issue_id)
 
         Logger.info("Agent task finished for issue_id=#{issue_id} session_id=#{session_id} reason=#{inspect(reason)}")
 
@@ -560,6 +565,7 @@ defmodule SymphonyElixir.Orchestrator do
         state = record_session_completion_totals(state, running_entry)
 
         stop_running_task(pid, ref, state.task_supervisor)
+        DispatchGate.release(issue_id)
 
         if cleanup_workspace do
           cleanup_issue_workspace(Map.get(running_entry, :issue, identifier), running_entry)
@@ -951,9 +957,20 @@ defmodule SymphonyElixir.Orchestrator do
   end
 
   defp spawn_issue_on_worker_host(%State{} = state, issue, attempt, recipient, worker_host) do
-    case Task.Supervisor.start_child(state.task_supervisor, fn ->
-           AgentRunner.run(issue, recipient, attempt: attempt, worker_host: worker_host)
-         end) do
+    if DispatchGate.acquire(issue.id) do
+      start_issue_task(state, issue, attempt, recipient, worker_host)
+    else
+      schedule_issue_retry(state, issue.id, attempt || 1, %{identifier: issue.identifier, issue_url: issue.url, delay_type: :continuation, worker_host: worker_host})
+    end
+  end
+
+  defp start_issue_task(state, issue, attempt, recipient, worker_host) do
+    case Task.Supervisor.start_child(
+           state.task_supervisor,
+           Project.wrap(fn ->
+             AgentRunner.run(issue, recipient, attempt: attempt, worker_host: worker_host)
+           end)
+         ) do
       {:ok, pid} ->
         ref = Process.monitor(pid)
 
@@ -991,6 +1008,7 @@ defmodule SymphonyElixir.Orchestrator do
         }
 
       {:error, reason} ->
+        DispatchGate.release(issue.id)
         Logger.error("Unable to spawn agent for #{issue_context(issue)}: #{inspect(reason)}")
         next_attempt = if is_integer(attempt), do: attempt + 1, else: nil
 
@@ -1091,6 +1109,14 @@ defmodule SymphonyElixir.Orchestrator do
   end
 
   defp handle_retry_issue(%State{} = state, issue_id, attempt, metadata) do
+    if DeploymentControl.dispatch_paused?() do
+      {:noreply, schedule_issue_retry(state, issue_id, attempt, Map.put(metadata, :delay_type, :continuation))}
+    else
+      retry_issue_lookup(state, issue_id, attempt, metadata)
+    end
+  end
+
+  defp retry_issue_lookup(state, issue_id, attempt, metadata) do
     case Tracker.fetch_issues_by_ids([issue_id]) do
       {:ok, issues} ->
         issues
@@ -1376,12 +1402,12 @@ defmodule SymphonyElixir.Orchestrator do
 
   @spec request_refresh() :: map() | :unavailable
   def request_refresh do
-    request_refresh(__MODULE__)
+    request_refresh(Project.name(__MODULE__))
   end
 
   @spec request_refresh(GenServer.server()) :: map() | :unavailable
   def request_refresh(server) do
-    if Process.whereis(server) do
+    if Project.whereis(server) do
       GenServer.call(server, :request_refresh)
     else
       :unavailable
@@ -1389,11 +1415,11 @@ defmodule SymphonyElixir.Orchestrator do
   end
 
   @spec snapshot() :: map() | :timeout | :unavailable
-  def snapshot, do: snapshot(__MODULE__, 15_000)
+  def snapshot, do: snapshot(Project.name(__MODULE__), 15_000)
 
   @spec snapshot(GenServer.server(), timeout()) :: map() | :timeout | :unavailable
   def snapshot(server, timeout) do
-    if Process.whereis(server) do
+    if Project.whereis(server) do
       try do
         GenServer.call(server, :snapshot, timeout)
       catch
@@ -1403,6 +1429,12 @@ defmodule SymphonyElixir.Orchestrator do
     else
       :unavailable
     end
+  end
+
+  @impl true
+  def handle_call(:checkpoint, _from, state) do
+    result = if map_size(state.running) == 0 and DeploymentControl.effects_held?(), do: SymphonyElixir.RuntimeCheckpoint.save(state), else: {:error, :not_drained}
+    {:reply, result, state}
   end
 
   @impl true

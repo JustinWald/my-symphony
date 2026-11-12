@@ -7,7 +7,7 @@ defmodule SymphonyElixir.Management.Recorder do
   @fields [:session, :model, :effort, :thread, :workflow, :phase, :revision]
 
   @spec start_link(keyword()) :: GenServer.on_start()
-  def start_link(opts), do: GenServer.start_link(__MODULE__, opts, name: __MODULE__)
+  def start_link(opts), do: GenServer.start_link(__MODULE__, opts, name: SymphonyElixir.Project.name(__MODULE__, Keyword.get(opts, :project, SymphonyElixir.Project.current())))
 
   @spec runtime_id() :: String.t()
   def runtime_id do
@@ -24,7 +24,7 @@ defmodule SymphonyElixir.Management.Recorder do
 
   @spec begin_session(Path.t(), map() | nil, String.t() | nil) :: map() | nil
   def begin_session(workspace, issue, worker_host) do
-    if Process.whereis(__MODULE__) do
+    if SymphonyElixir.Project.whereis(SymphonyElixir.Project.name(__MODULE__)) do
       started = System.monotonic_time(:millisecond)
 
       context = %{
@@ -69,7 +69,7 @@ defmodule SymphonyElixir.Management.Recorder do
       Process.put({:management_failed, context.session}, true)
     end
 
-    enqueue(Process.whereis(__MODULE__), context, message)
+    enqueue(SymphonyElixir.Project.whereis(SymphonyElixir.Project.name(__MODULE__)), context, message)
     :ok
   end
 
@@ -110,10 +110,14 @@ defmodule SymphonyElixir.Management.Recorder do
   end
 
   @impl true
-  def init(_opts) do
+  def init(opts) do
+    SymphonyElixir.Project.bind(Keyword.get(opts, :project, SymphonyElixir.Project.current()))
     runtime_id()
     {:ok, recover()}
   end
+
+  @impl true
+  def handle_call(:flush, _from, state), do: {:reply, :ok, state}
 
   @impl true
   def handle_cast({:observe, context, metadata, usage}, state) do

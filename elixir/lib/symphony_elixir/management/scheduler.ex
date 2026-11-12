@@ -4,19 +4,31 @@ defmodule SymphonyElixir.Management.Scheduler do
   alias SymphonyElixir.Management.{Audit, Collector, Delivery, Proposals, Reports, Settings, Store}
 
   @spec start_link(keyword()) :: GenServer.on_start()
-  def start_link(opts), do: GenServer.start_link(__MODULE__, opts, name: __MODULE__)
+  def start_link(opts), do: GenServer.start_link(__MODULE__, opts, name: SymphonyElixir.Project.name(__MODULE__, Keyword.get(opts, :project, SymphonyElixir.Project.current())))
 
   @impl true
-  def init(_opts) do
+  def init(opts) do
+    SymphonyElixir.Project.bind(Keyword.get(opts, :project, SymphonyElixir.Project.current()))
     enabled = Application.get_env(:symphony_elixir, :management_jobs_enabled, true)
     if enabled, do: Process.send_after(self(), :tick, 1_000)
     {:ok, %{}}
   end
 
   @impl true
+  def handle_call(:quiesce, _from, running), do: {:reply, :ok, running}
+
+  @impl true
   def handle_info(:tick, running) do
     Process.send_after(self(), :tick, 30_000)
 
+    if SymphonyElixir.DeploymentControl.effects_held?() do
+      {:noreply, running}
+    else
+      run_scheduled(running)
+    end
+  end
+
+  defp run_scheduled(running) do
     running =
       Enum.reduce(
         [
@@ -111,7 +123,7 @@ defmodule SymphonyElixir.Management.Scheduler do
     if Map.has_key?(running, name) do
       running
     else
-      task = Task.Supervisor.async_nolink(SymphonyElixir.Management.Tasks, fun)
+      task = Task.Supervisor.async_nolink(SymphonyElixir.Project.name(SymphonyElixir.Management.Tasks), SymphonyElixir.Project.wrap(fun))
       Map.put(running, name, task.ref)
     end
   end

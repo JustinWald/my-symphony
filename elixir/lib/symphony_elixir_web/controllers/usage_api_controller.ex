@@ -31,7 +31,7 @@ defmodule SymphonyElixirWeb.UsageApiController do
   end
 
   defp render_data(conn, action, from, until, page) do
-    if Process.whereis(Repo) do
+    if SymphonyElixir.Project.whereis(SymphonyElixir.Project.name(Repo)) do
       data = usage_data(action, from, until, page)
       json(conn, %{data: data, page: page, page_size: 50})
     else

@@ -28,7 +28,7 @@ defmodule SymphonyElixir.Management.Import do
       {:ok, db} = Exqlite.Sqlite3.open(source, mode: :readonly)
 
       try do
-        Repo.transaction(fn ->
+        Store.transaction(fn ->
           already = Store.rows("SELECT counts FROM imports WHERE source=?", [Path.expand(source)])
           if already != [], do: Repo.rollback(:already_imported)
 
@@ -97,7 +97,7 @@ defmodule SymphonyElixir.Management.Import do
       {:ok, file} = File.open(path, [:read, :binary])
 
       try do
-        Repo.transaction(fn ->
+        Store.transaction(fn ->
           {:ok, _} = :file.position(file, Store.get(key, 0))
           consume_telemetry(file)
           {:ok, offset} = :file.position(file, :cur)

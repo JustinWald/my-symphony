@@ -38,3 +38,7 @@ When logging Codex execution lifecycle events, include:
 - Is this event tied to a Codex session? Include `session_id`.
 - Is the failure reason present and concise?
 - Is the message format consistent with existing lifecycle logs?
+
+Manifest project processes and worker/request boundaries also attach `project_id`
+as Logger metadata. This distinguishes identical issue IDs across repositories;
+keep the existing `issue_id`, `issue_identifier`, and `session_id` fields.

@@ -4,7 +4,30 @@ defmodule SymphonyElixir.Management.Store do
   alias SymphonyElixir.Management.Repo
 
   @spec query!(String.t(), list()) :: map()
-  def query!(sql, params \\ []), do: SQL.query!(Repo, sql, params, log: false)
+  def query!(sql, params \\ []), do: SQL.query!(repo(), sql, params, log: false)
+
+  @spec repo() :: pid() | atom()
+  def repo do
+    case SymphonyElixir.Project.current() do
+      nil ->
+        Repo
+
+      project ->
+        SymphonyElixir.Project.whereis(SymphonyElixir.Project.name(Repo, project)) ||
+          raise "Project storage unavailable: #{project.id}"
+    end
+  end
+
+  @spec transaction((-> term())) :: {:ok, term()} | {:error, term()}
+  def transaction(fun) do
+    previous = Repo.put_dynamic_repo(repo())
+
+    try do
+      Repo.transaction(fun)
+    after
+      Repo.put_dynamic_repo(previous)
+    end
+  end
 
   @spec get(String.t(), term()) :: term()
   def get(key, default \\ nil) do
@@ -52,7 +75,7 @@ defmodule SymphonyElixir.Management.Store do
   @spec claim_job(String.t(), pos_integer()) :: {:ok, String.t()} | :busy
   def claim_job(name, ttl) do
     {:ok, result} =
-      Repo.transaction(fn ->
+      transaction(fn ->
         key = "native_job:" <> name
         now = System.system_time(:second)
 
@@ -70,7 +93,7 @@ defmodule SymphonyElixir.Management.Store do
 
   @spec release_job(String.t(), String.t()) :: :ok
   def release_job(name, token) do
-    Repo.transaction(fn ->
+    transaction(fn ->
       key = "native_job:" <> name
 
       case get(key) do

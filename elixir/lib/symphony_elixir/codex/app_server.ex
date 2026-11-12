@@ -61,10 +61,13 @@ defmodule SymphonyElixir.Codex.AppServer do
 
       with {:ok, session_policies} <- session_policies(workspace, worker_host),
            {:ok, thread_id} <- do_start_session(port, workspace, session_policies, dynamic_tool_binding) do
+        metadata = metadata_with_context(metadata, context, thread_id)
+        Process.put({__MODULE__, port}, metadata)
+
         {:ok,
          %{
            port: port,
-           metadata: metadata_with_context(metadata, context, thread_id),
+           metadata: metadata,
            approval_policy: session_policies.approval_policy,
            auto_approve_requests: session_policies.approval_policy == "never",
            thread_sandbox: session_policies.thread_sandbox,
@@ -113,6 +116,7 @@ defmodule SymphonyElixir.Codex.AppServer do
       end)
 
     metadata = issue_context(metadata, issue)
+    Process.put({__MODULE__, port}, metadata)
 
     case start_turn(port, thread_id, prompt, issue, workspace, approval_policy, turn_sandbox_policy) do
       {:ok, turn_id} ->
@@ -167,6 +171,7 @@ defmodule SymphonyElixir.Codex.AppServer do
 
   @spec stop_session(session()) :: :ok
   def stop_session(%{port: port} = session) when is_port(port) do
+    Process.delete({__MODULE__, port})
     Recorder.finish_session(get_in(session, [:metadata, :management_context]))
     stop_port(port)
   end
@@ -1020,7 +1025,8 @@ defmodule SymphonyElixir.Codex.AppServer do
   end
 
   defp metadata_from_message(port, payload) do
-    port |> port_metadata(nil) |> maybe_set_usage(payload)
+    metadata = Process.get({__MODULE__, port}, port_metadata(port, nil))
+    maybe_set_usage(metadata, payload)
   end
 
   defp maybe_set_usage(metadata, payload) when is_map(payload) do

@@ -4,7 +4,8 @@ defmodule SymphonyElixirWeb.UsageLive do
   alias SymphonyElixir.Management.UsageHistory
 
   @impl true
-  def mount(_params, _session, socket) do
+  def mount(params, _session, socket) do
+    SymphonyElixir.Project.mount(params)
     today = Date.utc_today()
 
     socket =
@@ -42,7 +43,7 @@ defmodule SymphonyElixirWeb.UsageLive do
     ~H"""
     <section class="dashboard-shell management-console">
       <header class="hero-card">
-        <a href="/">← Operations dashboard</a>
+        <a href={SymphonyElixir.Project.path("")}>← Operations dashboard</a>
         <h1 class="hero-title">Usage history</h1>
         <p>Durable token observations. Times and date filters use UTC; the end date is exclusive.</p>
         <p>Token-based costs are estimates, not billed subscription charges.</p>
@@ -90,7 +91,7 @@ defmodule SymphonyElixirWeb.UsageLive do
     with {:ok, from} <- Date.from_iso8601(socket.assigns.from),
          {:ok, until} <- Date.from_iso8601(socket.assigns.until),
          true <- Date.compare(from, until) == :lt do
-      if Process.whereis(SymphonyElixir.Management.Repo) do
+      if SymphonyElixir.Project.whereis(SymphonyElixir.Project.name(SymphonyElixir.Management.Repo)) do
         from = DateTime.new!(from, ~T[00:00:00], "Etc/UTC")
         until = DateTime.new!(until, ~T[00:00:00], "Etc/UTC")
 

@@ -1,6 +1,6 @@
 defmodule SymphonyElixir.Management.Settings do
   @moduledoc "Host policy plus durable operator settings and write-only credentials."
-  alias SymphonyElixir.Management.{Credentials, Repo, Store}
+  alias SymphonyElixir.Management.{Credentials, Store}
 
   @editable ~w(github_auth_mode email_sender email_recipients m365_tenant m365_client delivery_enabled publish_enabled weekly notifications audit rate_card)
   @audit ~w(enabled draft_prs model effort timeout_seconds max_calls_per_week)
@@ -9,7 +9,7 @@ defmodule SymphonyElixir.Management.Settings do
   @spec config() :: map()
   def config do
     {:ok, config} =
-      Repo.transaction(fn ->
+      Store.transaction(fn ->
         path = Path.join(SymphonyElixir.Config.management_state_dir(), "policy.json")
         policy = Application.get_env(:symphony_elixir, :management_policy) || workflow_policy(path)
 
@@ -39,7 +39,7 @@ defmodule SymphonyElixir.Management.Settings do
     references =
       Map.take(policy, ~w(symphony_github_token_env github_token_env slack_webhook_env m365_secret_env)) |> Map.values()
 
-    Enum.uniq(~w(VISIBILITY_GITHUB_TOKEN VISIBILITY_SLACK_WEBHOOK VISIBILITY_M365_SECRET) ++ references)
+    Enum.uniq(~w(VISIBILITY_GITHUB_TOKEN VISIBILITY_SLACK_WEBHOOK VISIBILITY_M365_SECRET) ++ references ++ SymphonyElixir.Project.secret_environment_names())
   end
 
   @spec public() :: map()
@@ -140,7 +140,7 @@ defmodule SymphonyElixir.Management.Settings do
 
   defp persist_settings(changes, credentials) do
     {:ok, :ok} =
-      Repo.transaction(fn ->
+      Store.transaction(fn ->
         version = if map_size(credentials) > 0, do: write_credentials(credentials)
         commit_settings(changes, version)
       end)

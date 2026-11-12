@@ -332,3 +332,16 @@ Use this exact structure for the persistent workpad comment and keep it updated 
 matter under management. Keep credential values outside workflow files. See
 ../docs/native-management.md. codex.preserve_permission_profile is opt-in and
 requires an explicitly configured host permission profile in codex.command. -->
+
+## Host-level project manifests
+
+A host may select this workflow through `SYMPHONY_PROJECT_MANIFEST` instead of the
+single-workflow invocation. A manifest entry supplies stable project identity and
+private durable state; this workflow still supplies its own tracker, workspace,
+hooks, prompts and management policy. Keep workspace roots unique between
+projects. Use immutable reviewed source revisions in `after_create`; deployment
+source selection is independent. The host may pause dispatch during promotion;
+existing jobs finish normally. Workers must never write production releases,
+configuration, credentials, deployment holds, or management databases. Symphony
+self-development uses the same PR/CI/human-review process as other repositories;
+production promotion remains an explicitly approved operator action.
