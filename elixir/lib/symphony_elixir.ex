@@ -35,13 +35,19 @@ defmodule SymphonyElixir.Application do
   def start_runtime do
     :ok = SymphonyElixir.LogFile.configure()
 
-    children = [
-      {Phoenix.PubSub, name: SymphonyElixir.PubSub},
-      SymphonyElixir.WorkflowStore,
-      SymphonyElixir.AgentRuntimeSupervisor,
-      SymphonyElixir.HttpServer,
-      SymphonyElixir.StatusDashboard
-    ]
+    management = if SymphonyElixir.Config.management_enabled?(), do: [SymphonyElixir.Management.Supervisor], else: []
+
+    children =
+      [
+        {Phoenix.PubSub, name: SymphonyElixir.PubSub},
+        SymphonyElixir.WorkflowStore
+      ] ++
+        management ++
+        [
+          SymphonyElixir.AgentRuntimeSupervisor,
+          SymphonyElixir.HttpServer,
+          SymphonyElixir.StatusDashboard
+        ]
 
     Supervisor.start_link(
       children,

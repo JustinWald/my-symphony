@@ -80,6 +80,8 @@ defmodule SymphonyElixir.MixProject do
       {:yaml_elixir, "~> 2.12"},
       {:solid, "~> 1.2"},
       {:ecto, "~> 3.13"},
+      {:ecto_sqlite3, "~> 0.22"},
+      {:tzdata, "~> 1.1"},
       {:burrito, "~> 1.5", only: :prod, runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev], runtime: false}
@@ -97,9 +99,10 @@ defmodule SymphonyElixir.MixProject do
   defp escript do
     [
       app: nil,
+      include_priv_for: [:exqlite, :tzdata],
       main_module: SymphonyElixir.CLI,
       name: "symphony",
-      path: "bin/symphony"
+      path: System.get_env("SYMPHONY_ESCRIPT_PATH", "bin/symphony")
     ]
   end
 

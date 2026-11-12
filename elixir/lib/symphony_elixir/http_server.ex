@@ -27,6 +27,7 @@ defmodule SymphonyElixir.HttpServer do
         with {:ok, ip} <- parse_host(host) do
           endpoint_opts = [
             server: true,
+            check_origin: if(Config.management_enabled?(), do: ["//localhost", "//127.0.0.1", "//[::1]"], else: false),
             http: [ip: ip, port: port],
             url: [host: normalize_host(host)],
             orchestrator: orchestrator,

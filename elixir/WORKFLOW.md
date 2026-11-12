@@ -327,3 +327,8 @@ Use this exact structure for the persistent workpad comment and keep it updated 
 
 - <only include when something was confusing during execution>
 ````
+
+<!-- Native management policy is configured in a private host workflow's front
+matter under management. Keep credential values outside workflow files. See
+../docs/native-management.md. codex.preserve_permission_profile is opt-in and
+requires an explicitly configured host permission profile in codex.command. -->

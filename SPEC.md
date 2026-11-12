@@ -2310,3 +2310,26 @@ Extension config:
 - Cleanup and observability:
   - Operators need to know which host owns a run, where its workspace lives, and whether cleanup
     happened on the right machine.
+
+## Fork extension: native management
+
+The fork may run a native management supervisor alongside orchestration, using
+SQLite for durable usage observations, reports, notification delivery and audit
+recommendations. It must not change tracker eligibility or workspace ownership.
+Provider calls, analysis, delivery and reporting run independently of dispatch.
+Management UI and usage APIs require loopback peer and Host validation.
+
+Trusted management execution policy belongs in the host WORKFLOW front matter
+under `management`. Operator settings cannot change source paths, validation
+commands, proposal path restrictions, credential environment references or worker
+permissions. Credential values remain outside the workflow and are never returned
+by management pages or APIs, forwarded to coding workers, or recorded in logs.
+Usage consists only of allowlisted metadata; cumulative counters are deduplicated
+per thread and retain the pricing snapshot applicable when observed. Incomplete
+coverage is distinguished from observed zero usage and from actual invoices.
+
+`codex.preserve_permission_profile` defaults to false. A host explicitly using a
+named Codex permission profile may enable it to omit legacy `sandbox` and
+`sandboxPolicy` overrides in thread/turn start requests. No other protocol fields
+are removed. The host profile must preserve workspace Git access and deny access
+to tracker, notifier, operator credential and management state files.

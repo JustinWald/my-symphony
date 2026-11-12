@@ -1,6 +1,9 @@
 import Config
 
+config :tzdata, :autoupdate, :disabled
+
 config :phoenix, :json_library, Jason
+config :phoenix, :filter_parameters, ["password", "secret", "token", "slack_webhook"]
 
 config :symphony_elixir, SymphonyElixirWeb.Endpoint,
   adapter: Bandit.PhoenixAdapter,
@@ -17,5 +20,6 @@ config :symphony_elixir, SymphonyElixirWeb.Endpoint,
 
 if config_env() == :test do
   config :symphony_elixir,
+    management_jobs_enabled: false,
     workflow_file_path: Path.expand("../test/fixtures/startup_workflow.md", __DIR__)
 end
