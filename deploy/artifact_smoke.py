@@ -148,6 +148,7 @@ Synthetic artifact compatibility check.
             assert sorted(row["project"] for row in trace) == sorted(projects), trace
             for row in trace:
                 assert Path(row["cwd"]).is_relative_to(root / row["project"] / "workspaces"), row
+                assert row["host_runtime_environment"] == [], row
             if len(projects) > 1:
                 snapshot = root / "preflight-input"
                 snapshot.mkdir()

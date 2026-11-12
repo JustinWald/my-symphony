@@ -14,6 +14,7 @@ defmodule SymphonyElixir.Codex.AppServer do
   @port_line_bytes 1_048_576
   @max_stream_log_bytes 1_000
   @orchestrator_environment ~w(
+    __BURRITO __BURRITO_BIN_PATH ROOTDIR BINDIR RELEASE_ROOT RELEASE_SYS_CONFIG
     SYMPHONY_PROJECT_MANIFEST SYMPHONY_CONTROL_DIR SYMPHONY_EXTERNAL_EFFECTS
     SYMPHONY_MANAGEMENT_ENABLED SYMPHONY_MANAGEMENT_STATE_DIR
     SYMPHONY_BUILD_REVISION SYMPHONY_ESCRIPT_PATH SYMPHONY_SSH_CONFIG
@@ -290,7 +291,10 @@ defmodule SymphonyElixir.Codex.AppServer do
   end
 
   defp worker_environment_names(dynamic_tool_binding) do
-    service_names = System.get_env() |> Map.keys() |> Enum.filter(&String.starts_with?(&1, "SYMPHONY_"))
+    service_names =
+      System.get_env()
+      |> Map.keys()
+      |> Enum.filter(&(String.starts_with?(&1, "SYMPHONY_") or String.starts_with?(&1, "__BURRITO")))
 
     (dynamic_tool_binding.secret_environment_names ++
        Settings.worker_secret_environment_names() ++

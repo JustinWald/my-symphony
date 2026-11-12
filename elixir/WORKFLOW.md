@@ -352,3 +352,7 @@ orchestrator retains them and continues to bind authenticated tracker tools.
 This keeps candidate tests from loading or holding the production runtime's
 configuration; explicit workflow command environment assignments can supply
 worker-specific test settings when needed.
+
+The worker boundary also removes Burrito's launcher markers and Erlang release
+paths, so development tests start their own application rather than inheriting
+the packaged production runtime. Packaged smoke checks verify this isolation.

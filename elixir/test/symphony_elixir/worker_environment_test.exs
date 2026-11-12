@@ -12,7 +12,13 @@ defmodule SymphonyElixir.WorkerEnvironmentTest do
       "SYMPHONY_PROJECT_MANIFEST" => Path.join(root, "host-projects.json"),
       "SYMPHONY_CONTROL_DIR" => Path.join(root, "host-control"),
       "SYMPHONY_MANAGEMENT_STATE_DIR" => Path.join(root, "host-state"),
-      "SYMPHONY_WORKER_ENVIRONMENT_TEST" => "host-only"
+      "SYMPHONY_WORKER_ENVIRONMENT_TEST" => "host-only",
+      "__BURRITO" => "1",
+      "__BURRITO_BIN_PATH" => Path.join(root, "host-executable"),
+      "ROOTDIR" => Path.join(root, "host-release"),
+      "BINDIR" => Path.join(root, "host-release/erts/bin"),
+      "RELEASE_ROOT" => Path.join(root, "host-release"),
+      "RELEASE_SYS_CONFIG" => Path.join(root, "host-sys-config")
     }
 
     previous = Map.new(variables, fn {name, _value} -> {name, System.get_env(name)} end)
@@ -24,7 +30,7 @@ defmodule SymphonyElixir.WorkerEnvironmentTest do
 
     File.write!(binary, """
     #!/bin/sh
-    env | sed -n '/^SYMPHONY_/s/=.*//p' > '#{trace}'
+    env | cut -d= -f1 | sort > '#{trace}'
     while IFS= read -r line; do
       case "$line" in
         *'"method":"initialize"'*) printf '%s\\n' '{"id":1,"result":{}}' ;;
@@ -39,7 +45,9 @@ defmodule SymphonyElixir.WorkerEnvironmentTest do
 
     assert {:ok, session} = AppServer.start_session(workspace)
     AppServer.stop_session(session)
-    assert File.read!(trace) == ""
+    received = trace |> File.read!() |> String.split("\n", trim: true)
+    for name <- Map.keys(variables), do: refute(name in received)
+    refute Enum.any?(received, &String.starts_with?(&1, "SYMPHONY_"))
     # Scrubbing belongs to the worker boundary; the service retains its own controls.
     for {name, value} <- variables, do: assert(System.get_env(name) == value)
   end

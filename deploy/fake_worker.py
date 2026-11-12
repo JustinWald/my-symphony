@@ -30,7 +30,9 @@ def main():
             temporary.write_text(json.dumps(issues))
             os.replace(temporary, issues_path)
             with Path(trace_path).open("a") as trace:
-                trace.write(json.dumps({"project": project, "cwd": os.getcwd()}) + "\n")
+                host_names = [name for name in os.environ if name.startswith(("SYMPHONY_", "__BURRITO"))
+                              or name in ("ROOTDIR", "BINDIR", "RELEASE_ROOT", "RELEASE_SYS_CONFIG")]
+                trace.write(json.dumps({"project": project, "cwd": os.getcwd(), "host_runtime_environment": host_names}) + "\n")
             emit({"method": "turn/completed"})
             return
 

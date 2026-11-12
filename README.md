@@ -60,3 +60,7 @@ remain outside agent tools.
 
 Worker launch also removes host `SYMPHONY_*` controls from the coding environment,
 so Symphony's own tests run against disposable configuration and state.
+
+The worker boundary also removes Burrito's launcher markers and Erlang release
+paths, so development tests start their own application rather than inheriting
+the packaged production runtime. Packaged smoke checks verify this isolation.

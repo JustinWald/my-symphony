@@ -1,6 +1,7 @@
 import hashlib
 import importlib.util
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -24,7 +25,8 @@ class ArtifactFixturesTests(unittest.TestCase):
                         {"method": "thread/start", "id": 2}, {"method": "turn/start", "id": 3}]
             result = subprocess.run([sys.executable, str(ROOT / "fake_worker.py"), str(issues), str(trace), "alpha"],
                                     input="\n".join(json.dumps(message) for message in messages) + "\n",
-                                    text=True, capture_output=True, check=True, cwd=directory)
+                                    text=True, capture_output=True, check=True, cwd=directory,
+                                    env={**os.environ, "SYMPHONY_FIXTURE_MARKER": "synthetic-runtime-marker"})
             replies = [json.loads(line) for line in result.stdout.splitlines()]
             self.assertEqual(replies[:3], [{"id": 1, "result": {}},
                 {"id": 2, "result": {"thread": {"id": "thread-alpha"}}},
@@ -32,7 +34,11 @@ class ArtifactFixturesTests(unittest.TestCase):
             self.assertEqual(replies[3]["params"]["tokenUsage"]["total"]["inputTokens"], 10)
             self.assertEqual(replies[4], {"method": "turn/completed"})
             self.assertEqual(json.loads(issues.read_text())[0]["state"], "Done")
-            self.assertEqual(json.loads(trace.read_text()), {"project": "alpha", "cwd": str(directory)})
+            observed = json.loads(trace.read_text())
+            self.assertEqual(observed["project"], "alpha")
+            self.assertEqual(observed["cwd"], str(directory))
+            self.assertIn("SYMPHONY_FIXTURE_MARKER", observed["host_runtime_environment"])
+            self.assertNotIn("synthetic-runtime-marker", trace.read_text())
 
     def test_manifest_records_source_and_checksum_of_exact_packaged_bytes(self):
         with tempfile.TemporaryDirectory() as temporary:
