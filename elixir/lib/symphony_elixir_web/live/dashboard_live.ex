@@ -9,10 +9,13 @@ defmodule SymphonyElixirWeb.DashboardLive do
   @runtime_tick_ms 1_000
 
   @impl true
-  def mount(_params, _session, socket) do
+  def mount(params, _session, socket) do
+    SymphonyElixir.Project.mount(params)
+
     socket =
       socket
       |> assign(:payload, load_payload())
+      |> assign(:projects, project_payloads())
       |> assign(:now, DateTime.utc_now())
 
     if connected?(socket) do
@@ -34,6 +37,7 @@ defmodule SymphonyElixirWeb.DashboardLive do
     {:noreply,
      socket
      |> assign(:payload, load_payload())
+     |> assign(:projects, project_payloads())
      |> assign(:now, DateTime.utc_now())}
   end
 
@@ -41,13 +45,22 @@ defmodule SymphonyElixirWeb.DashboardLive do
   def render(assigns) do
     ~H"""
     <section class="dashboard-shell">
+      <nav aria-label="Projects">
+        <article :for={project <- @projects}>
+          <a href={"/projects/#{project.id}"}>{project.id}</a>
+          <span>{project.status}</span>
+          <a href={"/projects/#{project.id}/reports"}>Reports</a>
+          <a href={"/projects/#{project.id}/usage"}>Usage</a>
+        </article>
+      </nav>
+      <p>Revision: {SymphonyElixir.DeploymentControl.revision()} · Deployment: {deployment_status()} · Dispatch paused: {to_string(SymphonyElixir.DeploymentControl.dispatch_paused?())}</p>
       <header class="hero-card">
         <div class="hero-grid">
           <div>
             <p class="eyebrow">
               Symphony Observability
             </p>
-            <a href="/usage">Usage history</a> · <a href="/settings/notifications">Reports and notifications</a>
+            <a href={SymphonyElixir.Project.path("/usage")}>Usage history</a> · <a href={SymphonyElixir.Project.path("/settings/notifications")}>Reports and notifications</a>
             <h1 class="hero-title">
               Operations Dashboard
             </h1>
@@ -160,7 +173,7 @@ defmodule SymphonyElixirWeb.DashboardLive do
                     <td>
                       <div class="issue-stack">
                         <.issue_identifier identifier={entry.issue_identifier} url={entry.issue_url} />
-                        <a class="issue-link" href={"/api/v1/#{entry.issue_identifier}"}>JSON details</a>
+                        <a class="issue-link" href={issue_api_path(entry.issue_identifier)}>JSON details</a>
                       </div>
                     </td>
                     <td>
@@ -241,7 +254,7 @@ defmodule SymphonyElixirWeb.DashboardLive do
                     <td>
                       <div class="issue-stack">
                         <.issue_identifier identifier={entry.issue_identifier} url={entry.issue_url} />
-                        <a class="issue-link" href={"/api/v1/#{entry.issue_identifier}"}>JSON details</a>
+                        <a class="issue-link" href={issue_api_path(entry.issue_identifier)}>JSON details</a>
                       </div>
                     </td>
                     <td>
@@ -313,7 +326,7 @@ defmodule SymphonyElixirWeb.DashboardLive do
                     <td>
                       <div class="issue-stack">
                         <.issue_identifier identifier={entry.issue_identifier} url={entry.issue_url} />
-                        <a class="issue-link" href={"/api/v1/#{entry.issue_identifier}"}>JSON details</a>
+                        <a class="issue-link" href={issue_api_path(entry.issue_identifier)}>JSON details</a>
                       </div>
                     </td>
                     <td><%= entry.attempt %></td>
@@ -330,12 +343,44 @@ defmodule SymphonyElixirWeb.DashboardLive do
     """
   end
 
+  defp deployment_status do
+    cond do
+      SymphonyElixir.DeploymentControl.effects_held?() -> "Effects held"
+      SymphonyElixir.DeploymentControl.dispatch_paused?() -> "Draining"
+      true -> "Running"
+    end
+  end
+
+  defp project_payloads do
+    Enum.map(SymphonyElixir.Project.all(), fn project ->
+      payload = Presenter.state_payload(SymphonyElixir.Project.name(SymphonyElixir.Orchestrator, project), snapshot_timeout_ms())
+
+      status =
+        case payload do
+          %{counts: counts} -> "#{counts.running} running · #{counts.retrying} retrying · #{counts.blocked} blocked"
+          _ -> "Unavailable"
+        end
+
+      %{id: project.id, status: status}
+    end)
+  end
+
+  defp issue_api_path(identifier) do
+    case SymphonyElixir.Project.current() do
+      nil -> "/api/v1/#{identifier}"
+      project -> "/api/v1/projects/#{project.id}/issues/#{identifier}"
+    end
+  end
+
   defp load_payload do
     Presenter.state_payload(orchestrator(), snapshot_timeout_ms())
   end
 
   defp orchestrator do
-    Endpoint.config(:orchestrator) || SymphonyElixir.Orchestrator
+    case SymphonyElixir.Project.current() do
+      nil -> Endpoint.config(:orchestrator) || SymphonyElixir.Orchestrator
+      project -> SymphonyElixir.Project.name(SymphonyElixir.Orchestrator, project)
+    end
   end
 
   defp snapshot_timeout_ms do

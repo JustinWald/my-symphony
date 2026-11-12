@@ -4,7 +4,8 @@ defmodule SymphonyElixirWeb.ManagementLive do
   alias SymphonyElixir.Management.{Audit, Delivery, Proposals, Reports, Settings, Store}
 
   @impl true
-  def mount(_params, _session, socket) do
+  def mount(params, _session, socket) do
+    SymphonyElixir.Project.mount(params)
     if connected?(socket), do: Process.send_after(self(), :refresh, 5_000)
     {:ok, load(assign(socket, notice: nil, preview: nil))}
   end
@@ -16,7 +17,23 @@ defmodule SymphonyElixirWeb.ManagementLive do
   end
 
   @impl true
-  def handle_event("save", params, socket) do
+  def handle_event(event, params, socket) do
+    task =
+      Task.Supervisor.async_nolink(
+        SymphonyElixir.Project.name(SymphonyElixir.Management.Tasks),
+        SymphonyElixir.Project.wrap(fn ->
+          if SymphonyElixir.DeploymentControl.effects_held?() do
+            {:noreply, assign(socket, :notice, "Deployment in progress; management changes are held.")}
+          else
+            dispatch_event(event, params, socket)
+          end
+        end)
+      )
+
+    Task.await(task, :infinity)
+  end
+
+  defp dispatch_event("save", params, socket) do
     changes = %{
       "email_sender" => params["sender"] || "",
       "email_recipients" => String.split(params["recipients"] || "", ~r/[,\s]+/, trim: true),
@@ -49,7 +66,7 @@ defmodule SymphonyElixirWeb.ManagementLive do
     {:noreply, load(assign(socket, :notice, notice))}
   end
 
-  def handle_event("test", %{"channel" => channel}, socket) do
+  defp dispatch_event("test", %{"channel" => channel}, socket) do
     notice =
       case Delivery.test(channel) do
         :ok -> "Provider accepted the test request; check its destination to confirm receipt."
@@ -59,16 +76,19 @@ defmodule SymphonyElixirWeb.ManagementLive do
     {:noreply, load(assign(socket, :notice, notice))}
   end
 
-  def handle_event("preview", _params, socket), do: {:noreply, assign(socket, :preview, Reports.preview())}
+  defp dispatch_event("preview", _params, socket), do: {:noreply, assign(socket, :preview, Reports.preview())}
 
-  def handle_event("audit_now", _params, socket) do
+  defp dispatch_event("audit_now", _params, socket) do
     notice =
-      if get_in(Settings.config(), ["audit", "enabled"]) == true do
-        Task.Supervisor.start_child(SymphonyElixir.Management.Tasks, fn ->
-          Reports.weekly(DateTime.utc_now(), notify: false)
-          Audit.run()
-          Proposals.prepare()
-        end)
+      if not SymphonyElixir.DeploymentControl.effects_held?() and get_in(Settings.config(), ["audit", "enabled"]) == true do
+        Task.Supervisor.start_child(
+          SymphonyElixir.Project.name(SymphonyElixir.Management.Tasks),
+          SymphonyElixir.Project.wrap(fn ->
+            Reports.weekly(DateTime.utc_now(), notify: false)
+            Audit.run()
+            Proposals.prepare()
+          end)
+        )
 
         "Audit requested; its budget and validation policy still apply."
       else
@@ -78,7 +98,7 @@ defmodule SymphonyElixirWeb.ManagementLive do
     {:noreply, assign(socket, :notice, notice)}
   end
 
-  def handle_event("rates", params, socket) do
+  defp dispatch_event("rates", params, socket) do
     with {input, ""} when input >= 0 <- Float.parse(params["input"] || ""),
          {output, ""} when output >= 0 <- Float.parse(params["output"] || ""),
          {cached, ""} when cached >= 0 <- Float.parse(params["cached"] || "") do
@@ -101,13 +121,13 @@ defmodule SymphonyElixirWeb.ManagementLive do
     end
   end
 
-  def handle_event("replay", %{"id" => id}, socket) do
+  defp dispatch_event("replay", %{"id" => id}, socket) do
     Delivery.replay(id)
     {:noreply, load(assign(socket, :notice, "Delivery queued for retry."))}
   end
 
-  def handle_event("decision", %{"proposal_id" => id, "state" => state, "note" => note}, socket)
-      when state in ["proposed", "evaluating", "promoted", "rejected"] do
+  defp dispatch_event("decision", %{"proposal_id" => id, "state" => state, "note" => note}, socket)
+       when state in ["proposed", "evaluating", "promoted", "rejected"] do
     if String.trim(note) != "" do
       Store.query!("UPDATE proposals SET status=? WHERE id=?", [state, id])
 
@@ -127,7 +147,7 @@ defmodule SymphonyElixirWeb.ManagementLive do
   def render(assigns) do
     ~H"""
     <section class="dashboard-shell management-console">
-      <header class="hero-card"><a href="/">Operations</a> · <a href="/usage">Usage</a><h1 class="hero-title">Reports and notifications</h1></header>
+      <header class="hero-card"><a href={SymphonyElixir.Project.path("")}>Operations</a> · <a href={SymphonyElixir.Project.path("/usage")}>Usage</a><h1 class="hero-title">Reports and notifications</h1></header>
       <p role="status">{@notice}</p>
       <p :if={!@settings}>Management storage is not enabled.</p>
       <section :if={@settings}>
@@ -256,7 +276,7 @@ defmodule SymphonyElixirWeb.ManagementLive do
   end
 
   defp load(socket) do
-    if Process.whereis(SymphonyElixir.Management.Repo) do
+    if SymphonyElixir.Project.whereis(SymphonyElixir.Project.name(SymphonyElixir.Management.Repo)) do
       assign(socket,
         settings: Settings.public(),
         deliveries: Store.rows("SELECT id,subject,channel,status,attempts,error FROM deliveries ORDER BY rowid DESC LIMIT 100"),

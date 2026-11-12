@@ -1,6 +1,6 @@
 defmodule SymphonyElixir.Management.Reports do
   @moduledoc "Weekly heartbeat independent of collection, audits and provider health."
-  alias SymphonyElixir.Management.{GitHub, Health, Measurements, Repo, Settings, Store}
+  alias SymphonyElixir.Management.{GitHub, Health, Measurements, Settings, Store}
 
   @spec weekly(DateTime.t(), keyword()) :: :ok
   def weekly(now \\ DateTime.utc_now(), opts \\ []) do
@@ -15,7 +15,7 @@ defmodule SymphonyElixir.Management.Reports do
     metrics = Measurements.calculate(start, DateTime.add(start, 7, :day))
     body = render(week, metrics)
 
-    Repo.transaction(fn ->
+    Store.transaction(fn ->
       case Store.rows("SELECT notified FROM reports WHERE week=?", [week]) do
         [%{"notified" => value}] when is_binary(value) -> :ok
         _ -> write_report(week, body, metrics, config, now, Keyword.get(opts, :notify, true))

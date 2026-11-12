@@ -549,7 +549,7 @@ defmodule SymphonyElixir.StatusDashboard do
     do: dashboard_url(host, configured_port, bound_port)
 
   defp snapshot_payload do
-    if Process.whereis(Orchestrator) do
+    if SymphonyElixir.Project.whereis(SymphonyElixir.Project.name(Orchestrator)) do
       case Orchestrator.snapshot() do
         %{
           running: running,

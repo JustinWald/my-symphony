@@ -6,6 +6,10 @@ defmodule SymphonyElixirWeb.Router do
   use Phoenix.Router
   import Phoenix.LiveView.Router
 
+  pipeline :project do
+    plug(SymphonyElixirWeb.ProjectContext)
+  end
+
   pipeline :management do
     plug(SymphonyElixirWeb.ManagementAccess)
   end
@@ -27,25 +31,59 @@ defmodule SymphonyElixirWeb.Router do
   end
 
   scope "/", SymphonyElixirWeb do
-    pipe_through(:browser)
+    pipe_through([:project, :browser])
 
     live("/", DashboardLive, :index)
   end
 
   scope "/", SymphonyElixirWeb do
-    pipe_through([:management, :browser])
+    pipe_through([:project, :management, :browser])
     live("/usage", UsageLive, :index)
     live("/settings/notifications", ManagementLive, :index)
     live("/reports", ManagementLive, :index)
   end
 
   scope "/", SymphonyElixirWeb do
-    pipe_through(:management)
+    pipe_through([:project, :management])
     get("/api/v1/usage", UsageApiController, :summary)
     get("/api/v1/usage/sessions", UsageApiController, :sessions)
   end
 
+  scope "/projects/:project_id", SymphonyElixirWeb do
+    pipe_through([:project, :browser])
+    live("/", DashboardLive, :index)
+  end
+
+  scope "/projects/:project_id", SymphonyElixirWeb do
+    pipe_through([:project, :management, :browser])
+    live("/usage", UsageLive, :index)
+    live("/reports", ManagementLive, :index)
+    live("/settings/notifications", ManagementLive, :index)
+  end
+
+  scope "/api/v1/projects/:project_id", SymphonyElixirWeb do
+    pipe_through(:project)
+    get("/state", ObservabilityApiController, :state)
+    post("/refresh", ObservabilityApiController, :refresh)
+    get("/issues/:issue_identifier", ObservabilityApiController, :issue)
+  end
+
+  scope "/api/v1/projects/:project_id", SymphonyElixirWeb do
+    pipe_through([:project, :management])
+    get("/settings", ProjectsApiController, :settings)
+    get("/settings/notifications", ProjectsApiController, :settings)
+    get("/reports", ProjectsApiController, :reports)
+    get("/usage", UsageApiController, :summary)
+    get("/usage/sessions", UsageApiController, :sessions)
+  end
+
   scope "/", SymphonyElixirWeb do
+    get("/api/v1/projects", ProjectsApiController, :index)
+    get("/api/v1/health", ProjectsApiController, :health)
+  end
+
+  scope "/", SymphonyElixirWeb do
+    pipe_through(:project)
     get("/api/v1/state", ObservabilityApiController, :state)
 
     match(:*, "/", ObservabilityApiController, :method_not_allowed)

@@ -2,6 +2,14 @@ defmodule SymphonyElixir.Management.HTTP do
   @moduledoc "Bounded provider HTTP with redacted failure classifications."
   @spec request(String.t(), keyword()) :: {:ok, term()} | {:error, integer(), non_neg_integer()}
   def request(url, options \\ []) do
+    if SymphonyElixir.DeploymentControl.effects_held?() do
+      {:error, 0, 0}
+    else
+      do_request(url, options)
+    end
+  end
+
+  defp do_request(url, options) do
     options = Keyword.merge(options, Application.get_env(:symphony_elixir, :management_http_options, []))
 
     case Req.request(

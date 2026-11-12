@@ -2,6 +2,14 @@ defmodule SymphonyElixir.Management.Command do
   @moduledoc "Bounded process-group execution for disposable audit workspaces."
   @spec run(String.t(), [String.t()], Path.t(), pos_integer(), map()) :: {:ok, String.t()} | {:error, atom()}
   def run(binary, args, cwd, timeout, overrides \\ %{}) do
+    if SymphonyElixir.DeploymentControl.effects_held?() do
+      {:error, :effects_held}
+    else
+      execute(binary, args, cwd, timeout, overrides)
+    end
+  end
+
+  defp execute(binary, args, cwd, timeout, overrides) do
     executable = System.find_executable(binary) || binary
 
     args =

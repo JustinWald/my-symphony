@@ -4,7 +4,7 @@ defmodule SymphonyElixir.Management.Repo do
 
   @impl true
   def init(_type, config) do
-    directory = SymphonyElixir.Config.management_state_dir()
+    directory = Keyword.get(config, :state_dir, SymphonyElixir.Config.management_state_dir())
     File.mkdir_p!(directory)
     File.chmod!(directory, 0o700)
 

@@ -58,6 +58,11 @@ defmodule SymphonyElixir.Tracker do
     }
   end
 
+  @spec secret_environment_names(map()) :: [String.t()]
+  def secret_environment_names(settings) do
+    settings |> adapter_for_settings!() |> adapter_secret_environment_names(settings)
+  end
+
   @spec execute_bound_agent_tool(map(), String.t(), term(), keyword()) :: map()
   def execute_bound_agent_tool(
         %{adapter: adapter, tracker_settings: tracker_settings},

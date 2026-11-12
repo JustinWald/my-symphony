@@ -1,0 +1,56 @@
+name: deployment-candidate
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  candidate:
+    name: candidate-linux_x86_64
+    runs-on: ubuntu-24.04
+    env:
+      SYMPHONY_BUILD_REVISION: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout exact source head
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Set up mise tools
+        uses: jdx/mise-action@5228313ee0372e111a38da051671ca30fc5a96db # v3
+        with:
+          install: true
+          cache: true
+          working_directory: elixir
+      - name: Validate operator failure recovery
+        run: python3 -m unittest discover -s deploy/tests -v
+      - name: Validate source
+        working-directory: elixir
+        run: make all
+      - name: Install packaging dependencies
+        run: |
+          mise install zig@0.15.2
+          sudo apt-get update
+          sudo apt-get install -y xz-utils bubblewrap apparmor-profiles
+      - name: Enable distribution namespace policy for preflight
+        run: |
+          sudo apparmor_parser -r /usr/share/apparmor/extra-profiles/bwrap-userns-restrict
+          bwrap --unshare-all --unshare-net --cap-drop ALL --ro-bind /usr /usr --ro-bind /bin /bin --ro-bind /lib /lib --ro-bind /lib64 /lib64 -- /usr/bin/true
+      - name: Build immutable candidate
+        working-directory: elixir
+        run: BURRITO_TARGET=linux_x86_64 MIX_ENV=prod mise exec zig@0.15.2 -- mix release symphony --overwrite
+      - name: Stage and test exact artifact
+        run: |
+          python3 deploy/package_candidate.py elixir/burrito_out/symphony_linux_x86_64 candidate "$SYMPHONY_BUILD_REVISION"
+          python3 deploy/artifact_smoke.py candidate/symphony "$SYMPHONY_BUILD_REVISION"
+      - name: Upload tested candidate
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: candidate-linux_x86_64
+          path: candidate/*
+          if-no-files-found: error
+          retention-days: 30

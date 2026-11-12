@@ -23,3 +23,5 @@ if config_env() == :test do
     management_jobs_enabled: false,
     workflow_file_path: Path.expand("../test/fixtures/startup_workflow.md", __DIR__)
 end
+
+config :logger, :default_formatter, metadata: [:project_id]

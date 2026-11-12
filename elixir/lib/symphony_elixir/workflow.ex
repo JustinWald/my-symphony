@@ -9,8 +9,14 @@ defmodule SymphonyElixir.Workflow do
 
   @spec workflow_file_path() :: Path.t()
   def workflow_file_path do
-    Application.get_env(:symphony_elixir, :workflow_file_path) ||
-      Path.join(File.cwd!(), @workflow_file_name)
+    case SymphonyElixir.Project.current() do
+      nil ->
+        Application.get_env(:symphony_elixir, :workflow_file_path) ||
+          Path.join(File.cwd!(), @workflow_file_name)
+
+      project ->
+        project.workflow_path
+    end
   end
 
   @spec set_workflow_file_path(Path.t()) :: :ok
@@ -35,7 +41,7 @@ defmodule SymphonyElixir.Workflow do
 
   @spec current() :: {:ok, loaded_workflow()} | {:error, term()}
   def current do
-    case Process.whereis(WorkflowStore) do
+    case SymphonyElixir.Project.whereis(SymphonyElixir.Project.name(WorkflowStore)) do
       pid when is_pid(pid) ->
         WorkflowStore.current()
 
@@ -114,7 +120,7 @@ defmodule SymphonyElixir.Workflow do
   end
 
   defp maybe_reload_store do
-    if Process.whereis(WorkflowStore) do
+    if SymphonyElixir.Project.whereis(SymphonyElixir.Project.name(WorkflowStore)) do
       _ = WorkflowStore.force_reload()
     end
 

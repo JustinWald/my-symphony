@@ -13,6 +13,12 @@ defmodule SymphonyElixir.Codex.AppServer do
   @turn_start_id 3
   @port_line_bytes 1_048_576
   @max_stream_log_bytes 1_000
+  @orchestrator_environment ~w(
+    __BURRITO __BURRITO_BIN_PATH ROOTDIR BINDIR RELEASE_ROOT RELEASE_SYS_CONFIG
+    SYMPHONY_PROJECT_MANIFEST SYMPHONY_CONTROL_DIR SYMPHONY_EXTERNAL_EFFECTS
+    SYMPHONY_MANAGEMENT_ENABLED SYMPHONY_MANAGEMENT_STATE_DIR
+    SYMPHONY_BUILD_REVISION SYMPHONY_ESCRIPT_PATH SYMPHONY_SSH_CONFIG
+  )
   @type session :: %{
           port: port(),
           metadata: map(),
@@ -61,10 +67,13 @@ defmodule SymphonyElixir.Codex.AppServer do
 
       with {:ok, session_policies} <- session_policies(workspace, worker_host),
            {:ok, thread_id} <- do_start_session(port, workspace, session_policies, dynamic_tool_binding) do
+        metadata = metadata_with_context(metadata, context, thread_id)
+        Process.put({__MODULE__, port}, metadata)
+
         {:ok,
          %{
            port: port,
-           metadata: metadata_with_context(metadata, context, thread_id),
+           metadata: metadata,
            approval_policy: session_policies.approval_policy,
            auto_approve_requests: session_policies.approval_policy == "never",
            thread_sandbox: session_policies.thread_sandbox,
@@ -113,6 +122,7 @@ defmodule SymphonyElixir.Codex.AppServer do
       end)
 
     metadata = issue_context(metadata, issue)
+    Process.put({__MODULE__, port}, metadata)
 
     case start_turn(port, thread_id, prompt, issue, workspace, approval_policy, turn_sandbox_policy) do
       {:ok, turn_id} ->
@@ -167,6 +177,7 @@ defmodule SymphonyElixir.Codex.AppServer do
 
   @spec stop_session(session()) :: :ok
   def stop_session(%{port: port} = session) when is_port(port) do
+    Process.delete({__MODULE__, port})
     Recorder.finish_session(get_in(session, [:metadata, :management_context]))
     stop_port(port)
   end
@@ -267,18 +278,29 @@ defmodule SymphonyElixir.Codex.AppServer do
   end
 
   defp tracker_secret_port_env(dynamic_tool_binding) do
-    (dynamic_tool_binding.secret_environment_names ++ Settings.worker_secret_environment_names())
-    |> valid_environment_names()
+    dynamic_tool_binding
+    |> worker_environment_names()
     |> Enum.map(fn name -> {String.to_charlist(name), false} end)
   end
 
   defp tracker_secret_unset_command(dynamic_tool_binding) do
-    names = dynamic_tool_binding.secret_environment_names ++ Settings.worker_secret_environment_names()
-
-    case valid_environment_names(names) do
+    case worker_environment_names(dynamic_tool_binding) do
       [] -> nil
       names -> "unset " <> Enum.join(names, " ")
     end
+  end
+
+  defp worker_environment_names(dynamic_tool_binding) do
+    service_names =
+      System.get_env()
+      |> Map.keys()
+      |> Enum.filter(&(String.starts_with?(&1, "SYMPHONY_") or String.starts_with?(&1, "__BURRITO")))
+
+    (dynamic_tool_binding.secret_environment_names ++
+       Settings.worker_secret_environment_names() ++
+       @orchestrator_environment ++ service_names)
+    |> Enum.uniq()
+    |> valid_environment_names()
   end
 
   defp valid_environment_names(names) do
@@ -1020,7 +1042,8 @@ defmodule SymphonyElixir.Codex.AppServer do
   end
 
   defp metadata_from_message(port, payload) do
-    port |> port_metadata(nil) |> maybe_set_usage(payload)
+    metadata = Process.get({__MODULE__, port}, port_metadata(port, nil))
+    maybe_set_usage(metadata, payload)
   end
 
   defp maybe_set_usage(metadata, payload) when is_map(payload) do

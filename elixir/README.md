@@ -408,3 +408,83 @@ This project is licensed under the [Apache License 2.0](../LICENSE).
 
 Native management adds `/usage`, `/reports` and
 `/settings/notifications` to the existing loopback dashboard. Enable it with `SYMPHONY_MANAGEMENT_ENABLED=1`; see [operation and migration instructions](../docs/native-management.md).
+
+### Multiple managed repositories and safe upgrades
+
+Set `SYMPHONY_PROJECT_MANIFEST` to a private JSON manifest to start multiple project
+runtimes in one service. The single `WORKFLOW.md` invocation remains supported.
+See [`deploy/examples/projects.json`](../deploy/examples/projects.json) and the
+[operator guide](../deploy/README.md). Each enabled entry supplies a stable `id`,
+`workflow_path`, and `state_dir`; paths resolve relative to the manifest. Its
+workflow supplies the tracker binding and workspace root. Keep RequirementRegistry
+first and retain its **existing state directory and workspace root** to preserve
+legacy URLs, identifiers, settings, reports, and history. Disabled entries never
+become the default. Manifest membership changes require a drained service restart.
+
+Each project owns its workflow cache, SQLite repository, recorder, management
+scheduler, task supervisors, and orchestrator. Context is bound explicitly when
+starting OTP children, worker closures, and HTTP/LiveView requests; selecting a
+project never changes global workflow or credential configuration. Canonical
+state/workspace roots must be disjoint, workflows must stay outside all coding
+workspaces, and workflow reload cannot move the pinned workspace root. Every
+coding worker strips the credential environment references of **all** projects.
+Tracker tools retain their per-session credential binding. Keep production
+executables, configuration, credentials, control files, and state outside sandbox
+write roots, using the existing workspace-write policy.
+
+A shared FIFO gate permits one coding worker across manifest projects. The usual
+priority ordering, branch/PR reuse, and preserved workspace behavior remain within
+each project. Use an immutable reviewed source SHA for workspace bootstrap; this
+is independent of the executable selected by production's release pointer.
+
+The dashboard stays on its configured port (4687 in production) and lists project
+running/retrying/blocked counts and navigation links. Project pages are under
+`/projects/:project_id`, with `/usage`, `/reports`, and `/settings/notifications`.
+APIs are `/api/v1/projects`, `/api/v1/projects/:project_id/state`, `/refresh`,
+`/issues/:issue_identifier`, `/usage`, `/usage/sessions`, `/reports`, and `/settings`.
+Reports/settings APIs retain the management loopback boundary and return public
+settings only. Legacy routes use the
+first enabled project. Management access retains its loopback/Host restrictions.
+
+`GET /api/v1/health` returns the embedded build revision, per-project runtime,
+storage/migration readiness, active coding and management task counts, and durable
+hold/checkpoint status. It returns 503 if any enabled runtime is unready. The
+state-path digest lets the operator verify that backups cover every enabled
+project without publishing host paths. Build with `SYMPHONY_BUILD_REVISION` set to
+the full source SHA. Development builds report `development`.
+
+Only the external `symphony-deploy` operator reads approval and writes deployment
+holds. The service reads `SYMPHONY_CONTROL_DIR/pause.json`; malformed/unreadable
+holds stop both dispatch and external effects. Dispatch pause allows existing
+workers and handoffs to complete. Effects hold stops scheduled management launches,
+manual management actions, provider requests, and management subprocesses. Manual
+operations already underway count toward drain. Once drained, health barriers
+flush the recorder and atomically checkpoint completed, claimed, blocked, retry,
+and usage-total state; retry deadlines survive a new runtime's monotonic clock.
+Readiness remains held through activation and observation. The environment
+`SYMPHONY_EXTERNAL_EFFECTS=disabled` also holds dispatch/effects for isolated
+preflight. It is not a replacement for filesystem/network isolation.
+
+For packaged tests, the memory tracker optionally reads a JSON array from
+`tracker.provider.issues_file`, relative to the workflow. The fixture uses the
+normalized issue field names and is re-read on each poll. Production trackers
+remain bound through their normal provider configuration.
+
+The 100% coverage threshold, strict lint/spec checks, Dialyzer, PR-description
+check, and cross-platform packaging checks remain required. Candidate CI adds
+packaged single-project and two-project startup/restart tests with fake Codex and
+isolated durable usage. Production rollout still requires a reviewed private
+preflight hook, human merge, explicit production approval, and a completed
+active-job drain/recovery drill; do not enable ongoing self-development before
+that full loop succeeds.
+
+Coding workers do not inherit the host's `SYMPHONY_*` environment variables,
+including the project manifest, deployment controls and management state. The
+orchestrator retains them and continues to bind authenticated tracker tools.
+This keeps candidate tests from loading or holding the production runtime's
+configuration; explicit workflow command environment assignments can supply
+worker-specific test settings when needed.
+
+The worker boundary also removes Burrito's launcher markers and Erlang release
+paths, so development tests start their own application rather than inheriting
+the packaged production runtime. Packaged smoke checks verify this isolation.

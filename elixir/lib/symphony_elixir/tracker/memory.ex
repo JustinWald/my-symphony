@@ -34,7 +34,25 @@ defmodule SymphonyElixir.Tracker.Memory do
   def secret_environment_names(_tracker_settings), do: []
 
   defp configured_issues do
-    Application.get_env(:symphony_elixir, :memory_tracker_issues, [])
+    case SymphonyElixir.Config.settings!().tracker.provider["issues_file"] do
+      nil ->
+        Application.get_env(:symphony_elixir, :memory_tracker_issues, [])
+
+      path ->
+        directory = SymphonyElixir.Workflow.workflow_file_path() |> Path.dirname()
+
+        path
+        |> Path.expand(directory)
+        |> File.read!()
+        |> Jason.decode!()
+        |> Enum.map(&fixture_issue/1)
+    end
+  end
+
+  defp fixture_issue(row) do
+    defaults = Map.from_struct(%Issue{})
+    values = Map.new(defaults, fn {field, default} -> {field, Map.get(row, Atom.to_string(field), default)} end)
+    struct!(Issue, values)
   end
 
   defp issue_entries do

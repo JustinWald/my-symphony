@@ -19,9 +19,15 @@ defmodule SymphonyElixir.Config do
   @doc "Host-local durable management state; never stored in an agent workspace."
   @spec management_state_dir() :: Path.t()
   def management_state_dir do
-    Application.get_env(:symphony_elixir, :management_state_dir) ||
-      System.get_env("SYMPHONY_MANAGEMENT_STATE_DIR") ||
-      Path.join(System.get_env("XDG_STATE_HOME") || Path.expand("~/.local/state"), "symphony")
+    case SymphonyElixir.Project.current() do
+      nil ->
+        Application.get_env(:symphony_elixir, :management_state_dir) ||
+          System.get_env("SYMPHONY_MANAGEMENT_STATE_DIR") ||
+          Path.join(System.get_env("XDG_STATE_HOME") || Path.expand("~/.local/state"), "symphony")
+
+      project ->
+        project.state_dir
+    end
   end
 
   @default_prompt_template """

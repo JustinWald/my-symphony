@@ -1,6 +1,6 @@
 defmodule SymphonyElixir.Management.Audit do
   @moduledoc "Bounded read-only improvement analysis with explicit evidence and human decisions."
-  alias SymphonyElixir.Management.{Command, Recorder, Repo, Settings, Store, UsageHistory}
+  alias SymphonyElixir.Management.{Command, Recorder, Settings, Store, UsageHistory}
   @fields ~w(title hypothesis evidence evaluation quality_guardrails promotion rollback tradeoff)
 
   @spec allowed_path?(String.t(), [String.t()]) :: boolean()
@@ -86,7 +86,7 @@ defmodule SymphonyElixir.Management.Audit do
 
   defp claim_budget(week, policy) do
     {:ok, claimed} =
-      Repo.transaction(fn ->
+      Store.transaction(fn ->
         row = hd(Store.rows("SELECT audit FROM reports WHERE week=?", [week]))
         key = "audit_attempts:" <> week
         attempts = Store.get(key, 0)

@@ -2333,3 +2333,25 @@ named Codex permission profile may enable it to omit legacy `sandbox` and
 `sandboxPolicy` overrides in thread/turn start requests. No other protocol fields
 are removed. The host profile must preserve workspace Git access and deny access
 to tracker, notifier, operator credential and management state files.
+
+## Implementation extension: project isolation and drain-before-restart deployment
+
+The Elixir implementation optionally runs multiple project runtimes in one service.
+A static private manifest maps stable project IDs to workflow paths and durable
+state directories. Each runtime owns its configuration cache, process namespace,
+tracker binding, workspace root, management database and scheduler state; selecting
+a project must never switch application-global configuration. Existing single
+workflow operation and legacy default-project routes remain available. Manifest
+mode begins with one shared coding slot and fair project selection.
+
+An external operator, separate from coding tools, promotes immutable CI artifacts
+only after explicit approval. A durable service-wide dispatch pause permits active
+jobs and their completion/handoff processing to finish. Promotion waits at most
+20 minutes and aborts without killing active jobs. After drain, effects are held,
+management work is flushed, retry/blocked/completed state is checkpointed, durable
+state/configuration are backed up, and an isolated candidate preflight must pass.
+The release pointer changes atomically and readiness plus two minutes of observation
+must pass while holds remain. Before effects resume, failures restore the previous
+executable/configuration/state; after effects may have resumed, older state cannot
+be restored automatically without reconciliation. Production merge and deployment
+approval remain human decisions. Live transfer of running jobs is unsupported.

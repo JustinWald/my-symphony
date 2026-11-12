@@ -1,0 +1,16 @@
+{
+  "projects": [
+    {
+      "id": "requirementregistry",
+      "workflow_path": "/PRIVATE/requirementregistry/WORKFLOW.md",
+      "state_dir": "/EXISTING/requirementregistry/state",
+      "enabled": true
+    },
+    {
+      "id": "symphony",
+      "workflow_path": "/PRIVATE/symphony/WORKFLOW.md",
+      "state_dir": "/PRIVATE/symphony/state",
+      "enabled": true
+    }
+  ]
+}

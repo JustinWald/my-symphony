@@ -1,6 +1,6 @@
 defmodule SymphonyElixir.Management.Collector do
   @moduledoc "Tracker observations without modifying dispatch eligibility."
-  alias SymphonyElixir.Management.{GitHub, Health, PullRequests, Repo, Settings, Store}
+  alias SymphonyElixir.Management.{GitHub, Health, PullRequests, Settings, Store}
 
   @labels %{
     "ready" => "symphony-ready",
@@ -22,7 +22,7 @@ defmodule SymphonyElixir.Management.Collector do
 
     case GitHub.pages(config, "/issues?state=all&sort=updated&direction=desc") do
       {:ok, issues} ->
-        Repo.transaction(fn -> Enum.each(issues, &observe(&1, labels, now)) end)
+        Store.transaction(fn -> Enum.each(issues, &observe(&1, labels, now)) end)
         record_recovery(now)
         Store.put("github_health", %{"at" => DateTime.to_iso8601(now), "status" => "ok"})
 

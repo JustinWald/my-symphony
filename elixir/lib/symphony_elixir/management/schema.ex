@@ -46,10 +46,16 @@ end
 
 defmodule SymphonyElixir.Management.Schema do
   @moduledoc "Compiled migrations work in releases without runtime source files."
-  alias SymphonyElixir.Management.{Migrations.CreateManagement, Repo}
+  alias SymphonyElixir.Management.{Migrations.CreateManagement, Repo, Store}
 
   @spec migrate() :: [integer()]
   def migrate do
-    Ecto.Migrator.run(Repo, [{20_261_111_000_000, CreateManagement}], :up, all: true, log: false)
+    previous = Repo.put_dynamic_repo(Store.repo())
+
+    try do
+      Ecto.Migrator.run(Repo, [{20_261_111_000_000, CreateManagement}], :up, all: true, log: false)
+    after
+      Repo.put_dynamic_repo(previous)
+    end
   end
 end

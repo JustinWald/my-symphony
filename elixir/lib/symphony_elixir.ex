@@ -35,23 +35,49 @@ defmodule SymphonyElixir.Application do
   def start_runtime do
     :ok = SymphonyElixir.LogFile.configure()
 
-    management = if SymphonyElixir.Config.management_enabled?(), do: [SymphonyElixir.Management.Supervisor], else: []
+    projects =
+      case System.get_env("SYMPHONY_PROJECT_MANIFEST") do
+        nil ->
+          []
+
+        path ->
+          {:ok, projects} = SymphonyElixir.ProjectManifest.load(path)
+          projects
+      end
+
+    Application.put_env(:symphony_elixir, :projects, projects)
+
+    runtimes =
+      if projects == [] do
+        management =
+          if SymphonyElixir.Config.management_enabled?(),
+            do: [SymphonyElixir.Management.Supervisor],
+            else: []
+
+        [SymphonyElixir.WorkflowStore] ++ management ++ [SymphonyElixir.AgentRuntimeSupervisor]
+      else
+        projects
+        |> Enum.filter(& &1.enabled)
+        |> Enum.map(fn project ->
+          Supervisor.child_spec({SymphonyElixir.ProjectSupervisor, project: project}, id: project.id)
+        end)
+      end
 
     children =
       [
-        {Phoenix.PubSub, name: SymphonyElixir.PubSub},
-        SymphonyElixir.WorkflowStore
+        {Registry, keys: :unique, name: SymphonyElixir.ProjectRegistry}
       ] ++
-        management ++
+        runtimes ++
         [
-          SymphonyElixir.AgentRuntimeSupervisor,
+          {Phoenix.PubSub, name: SymphonyElixir.PubSub},
           SymphonyElixir.HttpServer,
-          SymphonyElixir.StatusDashboard
+          SymphonyElixir.StatusDashboard,
+          SymphonyElixir.DispatchGate
         ]
 
     Supervisor.start_link(
       children,
-      strategy: :one_for_one,
+      strategy: if(projects == [], do: :one_for_one, else: :rest_for_one),
       name: SymphonyElixir.Supervisor
     )
   end

@@ -47,3 +47,20 @@ and Phoenix dashboard, including notifications, weekly reports, improvement
 audits and durable usage history. See [native management](docs/native-management.md)
 for operation and migration instructions. Upstream attribution and
 licensing are retained; upstream synchronization is optional.
+
+Symphony can manage its own repository alongside application repositories using
+an optional project manifest. Projects keep separate workflow, tracker, workspace,
+and durable management state within one production service. Development uses the
+ordinary issue → workspace → branch → PR → CI → human-review process. Production
+keeps its pinned executable until an operator explicitly promotes the immutable
+tested artifact after draining active jobs. See the
+[multi-project runtime instructions](elixir/README.md) and
+[deployment operator guide](deploy/README.md). Human merge and production approval
+remain outside agent tools.
+
+Worker launch also removes host `SYMPHONY_*` controls from the coding environment,
+so Symphony's own tests run against disposable configuration and state.
+
+The worker boundary also removes Burrito's launcher markers and Erlang release
+paths, so development tests start their own application rather than inheriting
+the packaged production runtime. Packaged smoke checks verify this isolation.
