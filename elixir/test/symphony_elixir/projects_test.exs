@@ -4,8 +4,8 @@ defmodule SymphonyElixir.ProjectsTest do
   import Phoenix.LiveViewTest
   @endpoint SymphonyElixirWeb.Endpoint
   alias SymphonyElixir.{Config, DeploymentControl, DispatchGate, Orchestrator, Project}
-  alias SymphonyElixir.Management.{Command, HTTP, Scheduler, Settings, Store}
-  alias SymphonyElixir.{ProjectManifest, RuntimeCheckpoint, WorkflowStore, Workspace}
+  alias SymphonyElixir.Management.{Audit, Command, HTTP, Scheduler, Settings, Store}
+  alias SymphonyElixir.{ProjectManifest, RuntimeCheckpoint, Workflow, WorkflowStore, Workspace}
   alias SymphonyElixir.Tracker.Memory
 
   setup do
@@ -433,6 +433,26 @@ defmodule SymphonyElixir.ProjectsTest do
       assert [%{"n" => 1}] = Store.rows("SELECT COUNT(*) AS n FROM events WHERE kind='finish'")
       assert [%{"input" => 10, "output" => 2}] = Store.rows("SELECT input,output FROM usage_observations")
     end
+  end
+
+  test "self-audit implementation and CI authority stays scoped to Symphony", %{root: root} do
+    a = project(root, "registry")
+    b = project(root, "symphony")
+    {:ok, template} = Workflow.load(Path.expand("../../../deploy/examples/SYMPHONY-WORKFLOW.md", __DIR__))
+    {:ok, workflow} = Workflow.load(b.workflow_path)
+    config = Map.put(workflow.config, "management", template.config["management"])
+    File.write!(b.workflow_path, "---\n#{Jason.encode!(config)}\n---\nSelf-audit test")
+    runtimes([a, b])
+    Project.bind(b)
+    config = Settings.config()
+    assert config["repo"] == "JustinWald/my-symphony"
+    patterns = config["audit"]["proposal_paths"]
+    assert Audit.allowed_path?("elixir/lib/example.ex", patterns)
+    assert Audit.allowed_path?(".github/workflows/candidate.yml", patterns)
+    assert config["audit"]["validation_commands"] == [["make", "-C", "elixir", "all"]]
+    Project.bind(a)
+    refute Audit.allowed_path?("elixir/lib/example.ex", ["WORKFLOW.md"])
+    assert Settings.config()["repo"] == "owner/registry"
   end
 
   defp eventually(fun, remaining \\ 200)

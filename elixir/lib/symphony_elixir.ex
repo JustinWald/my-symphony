@@ -65,14 +65,19 @@ defmodule SymphonyElixir.Application do
 
     children =
       [
-        {Phoenix.PubSub, name: SymphonyElixir.PubSub},
-        {Registry, keys: :unique, name: SymphonyElixir.ProjectRegistry},
-        SymphonyElixir.DispatchGate
-      ] ++ runtimes ++ [SymphonyElixir.HttpServer, SymphonyElixir.StatusDashboard]
+        {Registry, keys: :unique, name: SymphonyElixir.ProjectRegistry}
+      ] ++
+        runtimes ++
+        [
+          {Phoenix.PubSub, name: SymphonyElixir.PubSub},
+          SymphonyElixir.HttpServer,
+          SymphonyElixir.StatusDashboard,
+          SymphonyElixir.DispatchGate
+        ]
 
     Supervisor.start_link(
       children,
-      strategy: :one_for_one,
+      strategy: if(projects == [], do: :one_for_one, else: :rest_for_one),
       name: SymphonyElixir.Supervisor
     )
   end

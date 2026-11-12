@@ -72,3 +72,10 @@ python3 deploy/configure_main_protection.py --approve
 This requires a PR, the PR description check, exact-head source and candidate CI with a current base, resolved conversations, and administrator enforcement; force pushes, deletion, and PR bypass actors are disabled. Human inspection and manual merge use the existing GitHub identity. The review count is zero because GitHub does not allow that identity to approve its own PR; human inspection remains a workflow requirement. Applying it is an explicit repository administration action. This change does not apply it automatically, merge PRs, enable self-development, or deploy production. Complete the two-project active-job drill, private preflight integration, human handoff, merge, and approved deployment loop before enabling ongoing self-development.
 
 Run operator regression tests locally with `python3 -m unittest discover -s deploy/tests -v`. They exercise drain timeout without stopping jobs, checksum/CI/source failures, preflight input preparation and sandbox boundaries, migration/restart failures, interrupted activation, restore, serialization, and the irreversible effects boundary. Artifact startup/restart, fake Codex execution, and real namespaced preflight against synthetic state run in candidate CI; production notification deduplication still requires the application integration tests and production rollout drill.
+
+On Ubuntu, [AppArmor mediates unprivileged user namespaces](https://documentation.ubuntu.com/security/security-features/privilege-restriction/apparmor/).
+The clean CI runner loads the distribution's `bwrap-userns-restrict` profile before
+running the isolated preflight. Production preflight must pass under its host's
+approved namespace policy. The [upstream AppArmor profile](https://gitlab.com/apparmor/apparmor/-/blob/master/profiles/apparmor/profiles/extras/bwrap-userns-restrict)
+allows namespace setup by bubblewrap while restricting its children. No production
+host policy is modified by this PR.

@@ -35,7 +35,11 @@ jobs:
         run: |
           mise install zig@0.15.2
           sudo apt-get update
-          sudo apt-get install -y xz-utils bubblewrap
+          sudo apt-get install -y xz-utils bubblewrap apparmor-profiles
+      - name: Enable distribution namespace policy for preflight
+        run: |
+          sudo apparmor_parser -r /usr/share/apparmor/extra-profiles/bwrap-userns-restrict
+          bwrap --unshare-all --unshare-net --cap-drop ALL --ro-bind /usr /usr --ro-bind /bin /bin --ro-bind /lib /lib --ro-bind /lib64 /lib64 -- /usr/bin/true
       - name: Build immutable candidate
         working-directory: elixir
         run: BURRITO_TARGET=linux_x86_64 MIX_ENV=prod mise exec zig@0.15.2 -- mix release symphony --overwrite

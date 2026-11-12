@@ -25,10 +25,31 @@ server:
   host: 127.0.0.1
   port: 4687
 management:
+  repo: JustinWald/my-symphony
+  source_repo: /PRIVATE/reviewed-symphony-source
+  github_auth_mode: symphony
+  symphony_github_token_env: SYMPHONY_GITHUB_TOKEN
+  workflow:
+    required_checks: [make-all, validate-pr-description, candidate-linux_x86_64]
   delivery_enabled: false
   publish_enabled: false
   audit:
     enabled: false
+    draft_prs: false
+    codex_binary: /PRIVATE/toolchain/codex
+    timeout_seconds: 600
+    max_calls_per_week: 1
+    proposal_paths:
+      - elixir/lib/*
+      - elixir/test/*
+      - elixir/mix.exs
+      - elixir/mix.lock
+      - elixir/Makefile
+      - .github/workflows/*.yml
+      - docs/*
+      - README.md
+    validation_commands: [[make, -C, elixir, all]]
+    validation_readable_paths: [/PRIVATE/toolchain, /PRIVATE/dependency-cache]
 ---
 
 Work on {{ issue.identifier }}: {{ issue.title }} in this disposable Symphony development workspace.
