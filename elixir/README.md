@@ -477,3 +477,10 @@ isolated durable usage. Production rollout still requires a reviewed private
 preflight hook, human merge, explicit production approval, and a completed
 active-job drain/recovery drill; do not enable ongoing self-development before
 that full loop succeeds.
+
+Coding workers do not inherit the host's `SYMPHONY_*` environment variables,
+including the project manifest, deployment controls and management state. The
+orchestrator retains them and continues to bind authenticated tracker tools.
+This keeps candidate tests from loading or holding the production runtime's
+configuration; explicit workflow command environment assignments can supply
+worker-specific test settings when needed.

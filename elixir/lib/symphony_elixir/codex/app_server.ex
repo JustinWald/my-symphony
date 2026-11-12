@@ -13,6 +13,11 @@ defmodule SymphonyElixir.Codex.AppServer do
   @turn_start_id 3
   @port_line_bytes 1_048_576
   @max_stream_log_bytes 1_000
+  @orchestrator_environment ~w(
+    SYMPHONY_PROJECT_MANIFEST SYMPHONY_CONTROL_DIR SYMPHONY_EXTERNAL_EFFECTS
+    SYMPHONY_MANAGEMENT_ENABLED SYMPHONY_MANAGEMENT_STATE_DIR
+    SYMPHONY_BUILD_REVISION SYMPHONY_ESCRIPT_PATH SYMPHONY_SSH_CONFIG
+  )
   @type session :: %{
           port: port(),
           metadata: map(),
@@ -272,18 +277,26 @@ defmodule SymphonyElixir.Codex.AppServer do
   end
 
   defp tracker_secret_port_env(dynamic_tool_binding) do
-    (dynamic_tool_binding.secret_environment_names ++ Settings.worker_secret_environment_names())
-    |> valid_environment_names()
+    dynamic_tool_binding
+    |> worker_environment_names()
     |> Enum.map(fn name -> {String.to_charlist(name), false} end)
   end
 
   defp tracker_secret_unset_command(dynamic_tool_binding) do
-    names = dynamic_tool_binding.secret_environment_names ++ Settings.worker_secret_environment_names()
-
-    case valid_environment_names(names) do
+    case worker_environment_names(dynamic_tool_binding) do
       [] -> nil
       names -> "unset " <> Enum.join(names, " ")
     end
+  end
+
+  defp worker_environment_names(dynamic_tool_binding) do
+    service_names = System.get_env() |> Map.keys() |> Enum.filter(&String.starts_with?(&1, "SYMPHONY_"))
+
+    (dynamic_tool_binding.secret_environment_names ++
+       Settings.worker_secret_environment_names() ++
+       @orchestrator_environment ++ service_names)
+    |> Enum.uniq()
+    |> valid_environment_names()
   end
 
   defp valid_environment_names(names) do

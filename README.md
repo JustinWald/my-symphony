@@ -57,3 +57,6 @@ tested artifact after draining active jobs. See the
 [multi-project runtime instructions](elixir/README.md) and
 [deployment operator guide](deploy/README.md). Human merge and production approval
 remain outside agent tools.
+
+Worker launch also removes host `SYMPHONY_*` controls from the coding environment,
+so Symphony's own tests run against disposable configuration and state.

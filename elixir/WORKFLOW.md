@@ -345,3 +345,10 @@ existing jobs finish normally. Workers must never write production releases,
 configuration, credentials, deployment holds, or management databases. Symphony
 self-development uses the same PR/CI/human-review process as other repositories;
 production promotion remains an explicitly approved operator action.
+
+Coding workers do not inherit the host's `SYMPHONY_*` environment variables,
+including the project manifest, deployment controls and management state. The
+orchestrator retains them and continues to bind authenticated tracker tools.
+This keeps candidate tests from loading or holding the production runtime's
+configuration; explicit workflow command environment assignments can supply
+worker-specific test settings when needed.
