@@ -271,6 +271,9 @@ defmodule SymphonyElixir.ProjectsTest do
     File.write!(a.workflow_path, File.read!(a.workflow_path) |> String.replace(a.workspace_root, root <> "/other"))
     assert {:error, {:project_workspace_changed, "a"}} = WorkflowStore.force_reload()
     assert Config.local_workspace_root() == initial
+    File.write!(a.workflow_path, "---\ntracker: [invalid\n---\n")
+    assert {:error, _reason} = WorkflowStore.force_reload()
+    assert Project.secret_environment_names() == ["A_SECRET"]
   end
 
   test "memory fixtures select issues within the bound project", %{root: root} do

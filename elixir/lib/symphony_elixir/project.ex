@@ -1,6 +1,6 @@
 defmodule SymphonyElixir.Project do
   @moduledoc "Immutable project identity bound at OTP and request boundaries. No application configuration is switched."
-  alias SymphonyElixir.{Config.Schema, Tracker, Workflow}
+  alias SymphonyElixir.{Config.Schema, Tracker, Workflow, WorkflowStore}
 
   defstruct [:id, :workflow_path, :state_dir, :workspace_root, enabled: true]
 
@@ -75,12 +75,21 @@ defmodule SymphonyElixir.Project do
   @spec secret_environment_names() :: [String.t()]
   def secret_environment_names do
     Enum.flat_map(all(), fn project ->
-      {:ok, workflow} = Workflow.load(project.workflow_path)
-      {:ok, settings} = Schema.parse(workflow.config)
+      {:ok, settings} = project_settings(project)
       references = settings.management |> Map.take(~w(symphony_github_token_env github_token_env slack_webhook_env m365_secret_env)) |> Map.values()
       Tracker.secret_environment_names(settings.tracker) ++ references
     end)
     |> Enum.uniq()
+  end
+
+  defp project_settings(project) do
+    case whereis(name(WorkflowStore, project)) do
+      nil ->
+        with {:ok, workflow} <- Workflow.load(project.workflow_path), do: Schema.parse(workflow.config)
+
+      pid ->
+        GenServer.call(pid, :settings)
+    end
   end
 
   @spec path(String.t()) :: String.t()
