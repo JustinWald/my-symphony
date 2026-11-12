@@ -27,15 +27,18 @@ jobs:
           cache: true
           working_directory: elixir
 
+      - name: Identify exact compiler and runtime build
+        id: toolchain
+        run: |
+          mise exec -- elixir -e 'fingerprint = {System.build_info(), :erlang.system_info(:system_version)}; IO.puts("cache_id=" <> Base.encode16(:crypto.hash(:sha256, :erlang.term_to_binary(fingerprint)), case: :lower))' >> "$GITHUB_OUTPUT"
+
       - name: Cache deps and build
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: |
             elixir/deps
             elixir/_build
-          key: ${{ runner.os }}-mix-${{ hashFiles('elixir/mix.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-mix-
+          key: ${{ runner.os }}-${{ runner.arch }}-mix-v2-${{ steps.toolchain.outputs.cache_id }}-${{ hashFiles('elixir/mix.lock') }}
 
       - name: Verify make all
         run: make all

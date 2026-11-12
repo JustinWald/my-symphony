@@ -28,6 +28,15 @@ defmodule SymphonyElixir.Management.Scheduler do
     end
   end
 
+  def handle_info({reference, _result}, running) when is_reference(reference) do
+    Process.demonitor(reference, [:flush])
+    {:noreply, Map.reject(running, fn {_name, ref} -> ref == reference end)}
+  end
+
+  def handle_info({:DOWN, reference, :process, _pid, _reason}, running) do
+    {:noreply, Map.reject(running, fn {_name, ref} -> ref == reference end)}
+  end
+
   defp run_scheduled(running) do
     running =
       Enum.reduce(
@@ -55,15 +64,6 @@ defmodule SymphonyElixir.Management.Scheduler do
         else: running
 
     {:noreply, running}
-  end
-
-  def handle_info({reference, _result}, running) when is_reference(reference) do
-    Process.demonitor(reference, [:flush])
-    {:noreply, Map.reject(running, fn {_name, ref} -> ref == reference end)}
-  end
-
-  def handle_info({:DOWN, reference, :process, _pid, _reason}, running) do
-    {:noreply, Map.reject(running, fn {_name, ref} -> ref == reference end)}
   end
 
   defp audit_job do
